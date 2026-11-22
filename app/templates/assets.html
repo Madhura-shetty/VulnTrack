@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block content %}{% include "_crud.html" %}{% endblock %}
+{% block modals %}{% include "_modals.html" %}{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/crud.js') }}"></script><script src="{{ url_for('static', filename='js/assets.js') }}"></script>{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="cards" id="statCards">
+  <div class="stat"><span id="s-assets">-</span><label>Total assets</label></div>
+  <div class="stat"><span id="s-vulnerabilities">-</span><label>Total vulnerabilities</label></div>
+  <div class="stat crit"><span id="s-critical">-</span><label>Critical</label></div>
+  <div class="stat high"><span id="s-high">-</span><label>High</label></div>
+  <div class="stat kev"><span id="s-kev">-</span><label>Known exploited (KEV)</label></div>
+  <div class="stat"><span id="s-risks">-</span><label>Risk assessments</label></div>
+</section>
+<p class="muted">Last API synchronization: <strong id="lastSync">-</strong></p>
+<div class="card"><h2 class="card-title">Recent audit activity</h2>
+  <div class="table-wrap"><table><thead><tr><th>User</th><th>Action</th><th>Module</th><th>Record</th><th>Time</th></tr></thead><tbody id="recentAudit"></tbody></table></div></div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

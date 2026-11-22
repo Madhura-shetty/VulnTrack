@@ -1,0 +1,7 @@
+asset_code,name,asset_type,owner,host,environment,criticality,status
+AST-101,Web Server 01,Server,IT Operations,10.0.1.10,Production,Critical,Active
+AST-102,Customer Database,Database,Data Team,db01.corp.local,Production,Critical,Active
+AST-103,HR Laptop Pool,Workstation,HR Department,10.0.5.0,Production,Medium,Active
+AST-104,Edge Firewall,Network Device,Network Team,10.0.0.1,Production,High,Active
+AST-105,Staging App Server,Application,Dev Team,stage.corp.local,Staging,Medium,Active
+AST-106,Legacy File Server,Server,IT Operations,10.0.2.25,Production,High,Active

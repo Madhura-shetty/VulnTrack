@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf }}">
+<title>{{ title }} - VulnTrack</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body data-role="{{ role }}" data-page="{{ title }}">
+<aside class="sidebar" id="sidebar">
+  <div class="brand">VulnTrack</div>
+  <nav>
+    {% set links = [('pages.dashboard','Dashboard'),('pages.assets','Assets'),('pages.vulnerabilities','Vulnerabilities'),('pages.risks','Risk Assessment'),('pages.api_integration','API Integration'),('pages.audit_page','Audit Logs')] %}
+    {% for ep, label in links %}<a href="{{ url_for(ep) }}" class="{{ 'active' if label == title else '' }}">{{ label }}</a>{% endfor %}
+  </nav>
+</aside>
+<div class="main">
+  <header class="topbar">
+    <button id="menuBtn" class="btn icon" type="button" aria-label="Toggle menu">&#9776;</button>
+    <h1>{{ title }}</h1>
+    <div class="user"><span>{{ username }}</span><span class="badge role-{{ role }}">{{ role }}</span>
+      <button id="logoutBtn" class="btn" type="button">Sign out</button></div>
+  </header>
+  <main class="content">{% block content %}{% endblock %}</main>
+</div>
+<div id="loading" class="loading" hidden><div class="spinner"></div></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+{% block modals %}{% endblock %}
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body></html>

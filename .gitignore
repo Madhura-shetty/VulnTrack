@@ -1,0 +1,26 @@
+
+# Secrets
+.env
+.env.*
+
+# Allow the example template
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated files
+reports/
+*.log
+*.dump
+*.sql.gz
+
+# Local IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

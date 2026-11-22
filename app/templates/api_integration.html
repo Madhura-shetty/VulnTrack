@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="grid2">
+  <div class="card pad"><h2 class="card-title">Connection status</h2>
+    <p>NVD CVE API 2.0: <span id="nvdStatus" class="badge">Not checked</span> <small id="nvdMsg" class="muted"></small></p>
+    <p>CISA KEV feed: <span id="cisaStatus" class="badge">Not checked</span> <small id="cisaMsg" class="muted"></small></p>
+    <p class="muted">Last successful synchronization: <strong id="lastSuccess">-</strong></p>
+    <button id="checkBtn" class="btn admin-only" type="button">Check connections</button></div>
+  <div class="card pad"><h2 class="card-title">Fetch vulnerabilities</h2>
+    <form id="syncForm" class="stack" novalidate>
+      <label for="syncMode">Mode</label>
+      <select id="syncMode"><option value="recent">Recent (published last 7 days)</option><option value="keyword">Keyword search</option><option value="cve">CVE ID</option><option value="kev">Refresh CISA KEV flags only</option></select>
+      <label for="syncQuery">Keyword or CVE ID</label><input id="syncQuery" maxlength="100" placeholder="e.g. log4j or CVE-2021-44228">
+      <label for="syncLimit">Max records (1-100)</label><input id="syncLimit" type="number" min="1" max="100" value="20">
+      <p id="syncError" class="form-error" hidden></p>
+      <div class="row"><button id="syncBtn" class="btn primary admin-only" type="submit">Fetch &amp; synchronize</button>
+      <button id="sampleBtn" class="btn admin-only" type="button">Load labeled sample data</button></div>
+    </form></div>
+</section>
+<div class="card pad" id="resultCard" hidden><h2 class="card-title">Last run result</h2>
+  <p id="resultSummary"></p><ul id="resultMessages"></ul></div>
+<div class="card"><h2 class="card-title pad">Synchronization history</h2>
+  <div class="table-wrap"><table><thead><tr><th>Time</th><th>Source</th><th>Query</th><th>Fetched</th><th>New</th><th>Updated</th><th>Failed</th><th>Status</th><th>Message</th></tr></thead><tbody id="logBody"></tbody></table></div></div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/api_integration.js') }}"></script>{% endblock %}

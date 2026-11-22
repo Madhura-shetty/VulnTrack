@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="toolbar"><input id="searchInput" type="search" placeholder="Search user or record..." aria-label="Search">
+  <select id="moduleFilter" aria-label="Module"><option value="">All modules</option><option>auth</option><option>assets</option><option>vulnerabilities</option><option>risks</option><option>api</option><option>reports</option></select></div>
+<div class="card table-wrap"><table><thead><tr><th>User</th><th>Action</th><th>Module</th><th>Record</th><th>Timestamp</th></tr></thead><tbody id="auditBody"></tbody></table>
+<p id="emptyMsg" class="muted pad" hidden>No entries.</p></div>
+<p class="muted">Audit logs are append-only: the database rejects UPDATE and DELETE on this table.</p>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/audit.js') }}"></script>{% endblock %}

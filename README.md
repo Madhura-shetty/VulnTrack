@@ -1,90 +1,368 @@
-# VulnTrack - Vulnerability and Security Data Management System
+# VulnTrack – Vulnerability and IT Asset Management System
 
-A Flask + PostgreSQL web app that pulls **real** vulnerability data from the NVD CVE API 2.0 and the CISA Known Exploited Vulnerabilities (KEV) catalog, stores it in PostgreSQL, and lets users manage assets, vulnerabilities and risk assessments.
+VulnTrack is a web-based application built using **Python, Flask and PostgreSQL** to manage IT assets, track security vulnerabilities and assess security risks.
+
+It integrates with the **National Vulnerability Database (NVD)** and the **CISA Known Exploited Vulnerabilities (KEV) catalog** to retrieve vulnerability information and help users identify security issues.
 
 ## Features
-Login/logout with roles (Admin, Viewer) - dashboard with live DB statistics - asset CRUD - vulnerability search/filter/sort/detail with NVD sync and KEV flag - risk assessment CRUD with explainable scoring - API integration page (status, fetch, counts, history) - append-only audit log - CSV asset import and CSV reports.
 
-## Technology
-Python 3, Flask, PostgreSQL (psycopg2), requests, python-dotenv, Werkzeug (scrypt password hashing), HTML5/CSS3/vanilla JavaScript. No frontend frameworks.
+- **User Authentication:** Secure login with Admin and Viewer roles.
+- **Dashboard:** View asset statistics, vulnerability counts and recent activity.
+- **Asset Management:** Add, view, edit, delete, search and filter IT assets.
+- **Vulnerability Management:** View, search, filter and manage vulnerabilities.
+- **NVD Integration:** Fetch vulnerability information from the NVD CVE API.
+- **CISA KEV Integration:** Identify vulnerabilities listed in CISA's Known Exploited Vulnerabilities catalog.
+- **Risk Assessment:** Calculate risk scores based on likelihood and impact.
+- **Audit Logs:** Maintain a record of important user activities.
+- **CSV Import and Export:** Import asset information and export reports.
+- **Sample Data:** Load labelled sample data when external APIs are unavailable.
 
-## Architecture
-```
-Browser (HTML + JS fetch) -> Flask routes (app/routes) -> services (app/services) -> PostgreSQL (app/database)
-                                                      \-> NVD API / CISA KEV (HTTPS, server-side only)
-```
-* `routes/` HTTP only: auth, validation call, permission checks, JSON.  `services/` API clients, parsing, validation, sync, reports.  `database/` connection + schema.
-* The browser never calls NVD/CISA; only Flask does.
+## Technology Stack
 
-## Database schema (vulntrack_db)
-`users` (role admin/viewer) - `assets` - `vulnerabilities` (UNIQUE cve_id, source = nvd/sample/manual, is_kev, kev_data JSONB) - `risk_assessments` (FK asset + vulnerability, UNIQUE pair, generated risk_code) - `audit_logs` (trigger blocks UPDATE/DELETE) - `api_sync_logs`.
-CHECK constraints, foreign keys, NOT NULL and indexes are in `app/database/schema.sql`.
+| Component | Technology |
+|---|---|
+| Backend | Python, Flask |
+| Database | PostgreSQL |
+| Frontend | HTML, CSS, JavaScript |
+| Database Connectivity | psycopg2 |
+| External APIs | NVD CVE API 2.0, CISA KEV |
+| Authentication | Flask sessions, Werkzeug password hashing |
 
-## API -> Python -> PostgreSQL workflow
-1. Admin clicks **Fetch & synchronize** (JS `fetch` POST `/api/sync`, with CSRF header).
-2. `services/nvd.py` calls `https://services.nvd.nist.gov/rest/json/cves/2.0` (`keywordSearch`, `cveId`, or `pubStartDate/pubEndDate` for recent; `resultsPerPage` <= 100, one page only). Optional `NVD_API_KEY` header. Timeouts, HTTP 429 retry, network and malformed-JSON errors raise a safe `ApiError`.
-3. `parse_cve` extracts CVE ID, English description, CVSS (v4.0/v3.1/v3.0/v2 fallback, missing -> UNKNOWN), dates, CPE products, reference URLs. Bad records are counted, not fatal.
-4. `services/sync.py` upserts into PostgreSQL with `INSERT ... ON CONFLICT (cve_id) DO UPDATE` (`xmax = 0` tells inserted vs updated). Manual records are never overwritten; sample records are replaced by live data; analyst notes are preserved.
-5. `services/cisa.py` downloads `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`; stored CVEs are matched by CVE ID and flagged `is_kev` with date added, required action, due date, ransomware use. Nothing is assumed exploited.
-6. A row is written to `api_sync_logs` and `audit_logs`; the UI re-renders the table.
+## Application Architecture
 
-### Endpoints (all JSON, all require login; writes require Admin + CSRF header)
-`POST /api/login` `POST /api/logout` `GET /api/me` - `GET /api/dashboard` - `/api/assets` (GET, POST, PUT/DELETE `/<id>`) - `GET /api/vulnerabilities[?q,severity,is_kev,source,sort,dir]`, `GET/PUT/DELETE /api/vulnerabilities/<id>`, `POST /api/vulnerabilities` (manual) - `/api/risks` (CRUD) - `POST /api/sync`, `POST /api/sync/check`, `GET /api/sync/logs`, `POST /api/sync/sample` - `GET /api/audit-logs` - `GET /api/reports/{assets|vulnerabilities|risks}.csv`.
+The application follows a simple three-layer architecture:
 
-## CRUD & JavaScript
-`static/js/crud.js` is one reusable table module: it calls the Flask endpoint with `fetch`, rebuilds the table with DOM methods (`textContent`, so no XSS), handles debounced live search, filter dropdowns, click-to-sort headers, HTML `<dialog>` forms with client validation (server validates again), a confirmation dialog before delete, loading spinner and toast messages. No `prompt()` boxes.
-API-sourced (nvd) vulnerabilities: only analyst notes are editable and they cannot be deleted; manual/sample records are fully editable.
+1. **Frontend:** Provides the user interface using HTML, CSS and JavaScript.
+2. **Backend:** Flask handles authentication, requests, validation, business logic and API integration.
+3. **Database:** PostgreSQL stores users, assets, vulnerabilities, risk assessments and audit records.
 
-**Risk score** = likelihood (1-5) x impact (1-5). 20-25 Critical, 12-19 High, 6-11 Medium, 1-5 Low (computed on the server).
+External vulnerability information is retrieved by the Flask backend and stored in PostgreSQL.
 
-## Data security (what is and is not implemented)
-* **At rest:** data lives in PostgreSQL, protected by a non-superuser DB role and password; audit table is append-only (trigger). *Disk/database encryption at rest is NOT configured by this project*; use disk encryption (BitLocker) and encrypted backups (`pg_dump` to an encrypted location) in real deployments.
-* **In transit:** calls to NVD/CISA use HTTPS (TLS verified by `requests`). Running locally on `http://127.0.0.1:5000` is **not encrypted**. In deployment, run Waitress behind a reverse proxy (Nginx/Caddy/IIS) that terminates TLS, then set `SESSION_COOKIE_SECURE=true` (this also enables the HSTS header).
-* **In use:** data is processed in the Flask process memory after server-side authentication, role checks and validation. *No memory encryption is implemented.*
-* **App security:** scrypt password hashes (Werkzeug), server-side sessions cookie signed with `SECRET_KEY` (HttpOnly, SameSite=Lax, 30-min sliding expiry), session reset on login, CSRF token on every POST/PUT/DELETE, role checks in Flask decorators, parameterized SQL (`%s`) with whitelisted sort columns, Jinja autoescape + DOM `textContent` + CSP (`script-src 'self'`), login rate limit (5 failures / 5 min per IP+username; in-memory, single process), generic login errors, security headers, generic 500 errors (details only in the server log), CSV formula-injection neutralisation.
+## Getting Started
 
-## Installation (Windows PowerShell)
-Prerequisites: Python 3.10+, PostgreSQL 14+ (psql on PATH).
-```powershell
+Follow these instructions to run VulnTrack on your Windows computer.
+
+### 1. Prerequisites
+
+Install the following:
+
+- Python 3.10 or later
+- PostgreSQL 14 or later
+- Git (optional, for cloning the repository)
+
+### 2. Download the Project
+
+Clone the repository:
+
+```bash
+git clone https://github.com/Madhura-shetty/VulnTrack.git
 cd VulnTrack
+```
+
+Alternatively, download the repository as a ZIP file and extract it.
+
+### 3. Create a Virtual Environment
+
+Open PowerShell inside the project folder and run:
+
+```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1          # if blocked: Set-ExecutionPolicy -Scope Process Bypass
+```
+
+Activate it:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+If PowerShell blocks activation, run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+```
+
+Then activate the environment again.
+
+### 4. Install Dependencies
+
+```powershell
 pip install -r requirements.txt
+```
+
+### 5. Configure Environment Variables
+
+Create your local environment file:
+
+```powershell
 Copy-Item .env.example .env
-python -c "import secrets; print(secrets.token_urlsafe(48))"   # paste into SECRET_KEY in .env
-notepad .env                                                    # set DB_PASSWORD (same as below)
-```
-Edit the password in `scripts\setup_postgres.sql`, then create the role and database (once, as the postgres superuser):
-```powershell
-psql -U postgres -f scripts\setup_postgres.sql
-python scripts\init_db.py        # creates tables
-python scripts\seed_db.py        # demo users, assets, labelled SAMPLE vulnerabilities, risks
-python scripts\import_assets.py  # optional: CSV import of data\sample_assets.csv
-python run.py                    # open http://127.0.0.1:5000
-```
-**Demo logins** (set by `SEED_*_PASSWORD` in `.env`): `admin` / `Admin#Demo2026` (full access), `viewer` / `Viewer#Demo2026` (read-only). Change them for anything beyond a demo.
-
-### Using it
-1. Sign in as admin -> **API Integration** -> *Check connections* -> choose *Recent*, *Keyword* (e.g. `log4j`) or *CVE ID* -> *Fetch & synchronize*. Counts of fetched / new / updated / failed appear immediately and in the history table.
-2. If the APIs are unreachable, click *Load labeled sample data* (rows are tagged `sample`, never presented as live).
-3. **Vulnerabilities** page: search, filter, sort, click a CVE for details (KEV info, references).
-4. Reports: *Export CSV* buttons, or `python scripts\generate_report.py` (writes `reports\*.csv`).
-
-### Production-style run
-```powershell
-waitress-serve --listen=127.0.0.1:8000 run:app     # put an HTTPS reverse proxy in front
 ```
 
-## Testing
+Open `.env` and configure the following:
+
+- Flask `SECRET_KEY`
+- PostgreSQL database name
+- PostgreSQL username
+- PostgreSQL password
+- Demo admin and viewer passwords
+
+Generate a Flask secret key using:
+
 ```powershell
-pip install pytest
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Copy the generated value into `SECRET_KEY` in `.env`.
+
+**Important:** Never upload your actual `.env` file or share its secret values on GitHub.
+
+### 6. Set Up PostgreSQL
+
+Open `scripts/setup_postgres.sql`.
+
+Update the database role password to match the `DB_PASSWORD` value in your `.env` file.
+
+Open PostgreSQL using the `postgres` superuser and execute the setup script:
+
+```powershell
+psql -U postgres -f scripts/setup_postgres.sql
+```
+
+This creates the VulnTrack database and its application user.
+
+### 7. Initialize the Database
+
+Run the following commands in order:
+
+```powershell
+python scripts/init_db.py
+```
+
+This creates the required database tables.
+
+Next, run:
+
+```powershell
+python scripts/seed_db.py
+```
+
+This creates demo users, sample assets, sample vulnerabilities and risk assessments.
+
+Optionally, import additional sample assets:
+
+```powershell
+python scripts/import_assets.py
+```
+
+### 8. Start the Application
+
+Run:
+
+```powershell
+python run.py
+```
+
+Open the application in your browser:
+
+http://127.0.0.1:5000
+
+**Windows port alternative:** If port 5000 cannot be used, start the application on port 8000:
+
+```powershell
+python -c "from run import app; app.run(host='127.0.0.1', port=8000, debug=False)"
+```
+
+Then open:
+
+http://127.0.0.1:8000
+
+Keep the terminal running while using the application.
+
+## How to Use VulnTrack
+
+### 1. Log In
+
+Open the application in your browser and sign in using the demo credentials configured during database seeding.
+
+| Account | Access |
+|---|---|
+| Admin | Full application access |
+| Viewer | Read-only access |
+
+The actual demo passwords are configured through `SEED_ADMIN_PASSWORD` and `SEED_VIEWER_PASSWORD` in `.env`.
+
+### 2. Dashboard
+
+After logging in, the dashboard displays an overview of the system, including:
+
+- Total registered assets
+- Total vulnerabilities
+- Vulnerability severity information
+- Risk assessment statistics
+- Recent audit activity
+
+### 3. Manage Assets
+
+Open the **Assets** page.
+
+Admins can:
+- Add new IT assets.
+- Edit existing asset information.
+- Delete assets.
+- Search and filter asset records.
+
+Asset information includes asset code, name, type, owner, host, environment, criticality and status.
+
+Viewers can view asset information but cannot modify it.
+
+### 4. Manage Vulnerabilities
+
+Open the **Vulnerabilities** page.
+
+Users can:
+- View vulnerability records.
+- Search using CVE IDs or keywords.
+- Filter by severity, source and KEV status.
+- Sort vulnerability records.
+- Open individual vulnerability details.
+
+Manual vulnerability records can also be added by an administrator.
+
+NVD-sourced records are protected from deletion and general editing. Analysts can update their notes.
+
+### 5. Synchronize Vulnerability Data
+
+Open the **API Integration** page.
+
+As an administrator:
+
+1. Select **Check Connections** to check NVD and CISA connectivity.
+2. Choose a synchronization option:
+   - Recent vulnerabilities
+   - Keyword search (for example, `log4j`)
+   - Specific CVE ID
+3. Click **Fetch & Synchronize**.
+4. View the synchronization results.
+5. Check the synchronization history for previous operations.
+
+The application retrieves vulnerability information from NVD and checks the CISA KEV catalog for known exploited vulnerabilities.
+
+If external APIs are unavailable, use **Load Sample Data** to load clearly labelled demonstration records.
+
+Sample records are not presented as live vulnerability data.
+
+### 6. Perform Risk Assessments
+
+Open the **Risks** page.
+
+Administrators can create risk assessments by selecting an asset and an associated vulnerability.
+
+Risk is calculated using:
+
+**Risk Score = Likelihood × Impact**
+
+Both likelihood and impact are rated from 1 to 5.
+
+| Risk Score | Risk Level |
+|---|---|
+| 1–5 | Low |
+| 6–11 | Medium |
+| 12–19 | High |
+| 20–25 | Critical |
+
+The risk score and level are calculated by the backend.
+
+### 7. View Audit Logs
+
+Open the **Audit Logs** page to review recorded activities such as creating, updating and deleting records.
+
+The audit log is designed to be append-only, preventing updates and deletions through the database trigger.
+
+### 8. Import and Export Reports
+
+VulnTrack supports:
+
+- Importing assets from `data/sample_assets.csv`.
+- Exporting asset reports.
+- Exporting vulnerability reports.
+- Exporting risk assessment reports.
+
+CSV reports can be downloaded from the application.
+
+## Security Features
+
+The application includes several security controls:
+
+- Password hashing using Werkzeug's scrypt support.
+- Role-based access control.
+- CSRF protection for write operations.
+- Parameterized SQL queries.
+- Server-side input validation.
+- Login rate limiting.
+- Secure session cookie settings.
+- HTTP security headers.
+- Audit logging.
+- CSV formula-injection protection.
+
+**Security considerations:**
+
+- Local development uses HTTP and does not encrypt browser-to-server traffic.
+- HTTPS should be configured through a reverse proxy for deployment.
+- Disk/database encryption and encrypted backups must be configured separately.
+- The login rate limiter uses in-memory storage and is intended for a single-process demonstration setup.
+
+## Running Tests
+
+Run the test suite using:
+
+```powershell
 python -m pytest -q tests
 ```
-`test_services.py` and `test_app_security.py` need no database. `test_integration_db.py` runs against your real PostgreSQL (after init/seed) and covers login, admin CRUD, viewer 403, SQL-injection-as-data and audit logging. Live NVD/CISA calls are verified manually through the API Integration page.
 
-## Troubleshooting
-* `RuntimeError: SECRET_KEY is not set` - create `.env` from `.env.example`.
-* `connection refused` / `password authentication failed` - start the PostgreSQL service; match `DB_*` in `.env` with `setup_postgres.sql`.
-* NVD "HTTP 429" - wait 30 s or set `NVD_API_KEY` (free from nvd.nist.gov).
-* `Activate.ps1 cannot be loaded` - run `Set-ExecutionPolicy -Scope Process Bypass` first.
-* "Too many failed attempts" - wait 5 minutes or restart the app.
+The tests cover application security, validation, vulnerability parsing, API error handling and database integration.
+
+The database integration tests require a configured PostgreSQL database.
+
+External API calls are mocked in service tests. Live NVD and CISA connectivity can be checked through the API Integration page.
+
+## Project Structure
+
+```text
+VulnTrack/
+│
+├── app/
+│   ├── database/       # Database connection and schema
+│   ├── routes/         # Flask API routes
+│   ├── services/       # Business logic and API integration
+│   ├── static/         # CSS and JavaScript
+│   ├── templates/      # HTML templates
+│   ├── security.py     # Authentication and security controls
+│   └── __init__.py
+│
+├── data/               # Sample CSV data
+├── scripts/            # Database setup, seeding and utilities
+├── tests/              # Automated tests
+│
+├── .env.example        # Environment configuration template
+├── .gitignore
+├── requirements.txt
+├── run.py
+└── README.md
+```
+
+## Limitations and Future Improvements
+
+- Configure HTTPS for secure browser-to-server communication.
+- Implement encryption for database storage and backups.
+- Introduce a persistent rate limiter such as Redis for multi-process deployment.
+- Add scheduled vulnerability synchronization.
+- Run and expand automated tests in a dedicated test environment.
+
+## Author
+
+**Madhura Shetty**
+
+GitHub: https://github.com/Madhura-shetty
+
+---
+
+**VulnTrack – Helping organizations track IT assets, identify vulnerabilities and manage security risks.**
